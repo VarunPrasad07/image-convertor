@@ -1,5 +1,5 @@
 from flask import Flask, request, send_file, render_template
-from PIL import Image
+from PIL import Image, ImageFilter
 import io
 import os
 
@@ -54,6 +54,9 @@ def upload():
         image = Image.open(file.stream).convert("RGB")
         image = remove_white_borders(image)
         result = fit_resize(image)
+        result = result.filter(
+            ImageFilter.UnsharpMask(radius=1.2, percent=150, threshold=2)
+        )
 
         output = io.BytesIO()
         result.save(output, "PNG", optimize=True)
