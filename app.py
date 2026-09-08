@@ -1,5 +1,5 @@
 from flask import Flask, request, send_file, render_template
-from PIL import Image, ImageFilter, ImageEnhance
+from PIL import Image
 import io
 import os
 
@@ -33,15 +33,6 @@ def remove_white_borders(image: Image.Image) -> Image.Image:
 
     return image
 
-def enhance_image(image: Image.Image) -> Image.Image:
-    image = ImageEnhance.Contrast(image).enhance(1.2)
-    image = ImageEnhance.Sharpness(image).enhance(1.5)
-    image = ImageEnhance.Color(image).enhance(1.1)
-    image = image.filter(
-        ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3)
-    )
-    return image
-
 def fit_resize(image: Image.Image) -> Image.Image:
     resized = image.resize((TARGET_WIDTH, TARGET_HEIGHT), Image.Resampling.LANCZOS)
     return resized
@@ -62,7 +53,6 @@ def upload():
     try:
         image = Image.open(file.stream).convert("RGB")
         image = remove_white_borders(image)
-        image = enhance_image(image)
         result = fit_resize(image)
 
         output = io.BytesIO()
