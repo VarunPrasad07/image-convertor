@@ -34,23 +34,8 @@ def remove_white_borders(image: Image.Image) -> Image.Image:
     return image
 
 def fit_resize(image: Image.Image) -> Image.Image:
-    img_ratio = image.width / image.height
-    target_ratio = TARGET_WIDTH / TARGET_HEIGHT
-
-    if img_ratio > target_ratio:
-        new_width = TARGET_WIDTH
-        new_height = round(TARGET_WIDTH / img_ratio)
-    else:
-        new_height = TARGET_HEIGHT
-        new_width = round(TARGET_HEIGHT * img_ratio)
-
-    resized = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-    canvas = Image.new("RGB", (TARGET_WIDTH, TARGET_HEIGHT), (255, 255, 255))
-    left = (TARGET_WIDTH - new_width) // 2
-    top = (TARGET_HEIGHT - new_height) // 2
-    canvas.paste(resized, (left, top))
-    return canvas
+    resized = image.resize((TARGET_WIDTH, TARGET_HEIGHT), Image.Resampling.LANCZOS)
+    return resized
 
 @app.route("/")
 def index():

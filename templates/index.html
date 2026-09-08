@@ -50,22 +50,56 @@
             margin-bottom: 12px;
         }
         input[type="file"] { display: none; }
-        .preview {
+        .list {
             margin-top: 24px;
-            display: none;
-            text-align: center;
+            width: 100%;
+            max-width: 600px;
         }
-        .preview img {
-            max-width: 100%;
-            max-height: 350px;
-            border-radius: 8px;
+        .list.hidden { display: none; }
+        .item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: #16213e;
             border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 10px;
         }
-        .preview .label {
-            margin-top: 8px;
-            font-size: 0.85rem;
+        .item img {
+            width: 56px;
+            height: 56px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #333;
+            flex-shrink: 0;
+        }
+        .item .info {
+            flex: 1;
+            min-width: 0;
+        }
+        .item .info .name {
+            font-size: 0.9rem;
+            color: #eee;
+            word-break: break-all;
+        }
+        .item .info .meta {
+            font-size: 0.75rem;
             color: #888;
+            margin-top: 2px;
         }
+        .item .remove {
+            background: transparent;
+            border: 1px solid #e94560;
+            color: #e94560;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+        .item .remove:hover { background: #e94560; color: #fff; }
         .btn {
             display: inline-block;
             margin-top: 20px;
@@ -94,25 +128,31 @@
             font-size: 0.85rem;
             color: #6c6;
             display: none;
+            text-align: center;
+        }
+        .count-line {
+            margin-top: 14px;
+            font-size: 0.85rem;
+            color: #aaa;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <h1>Image Resize to 832×551</h1>
-    <p class="subtitle">Center crop &amp; resize for Instructables</p>
+    <p class="subtitle">Stretch &amp; resize for Instructables</p>
 
     <div class="dropzone" id="dropzone">
         <div class="icon">📁</div>
-        <p>Drag &amp; drop an image here, or click to browse</p>
+        <p>Drag &amp; drop images here, or click to browse</p>
     </div>
-    <input type="file" id="fileInput" accept="image/*">
+    <input type="file" id="fileInput" accept="image/*" multiple>
 
-    <div class="preview" id="preview">
-        <img id="previewImg" src="" alt="Preview">
-        <div class="label" id="previewLabel"></div>
-    </div>
+    <div class="count-line" id="countLine"></div>
 
-    <button class="btn" id="convertBtn" disabled>Convert &amp; Download</button>
+    <div class="list hidden" id="list"></div>
+
+    <button class="btn" id="convertBtn" disabled>Convert &amp; Download All</button>
 
     <div class="spinner" id="spinner">Processing...</div>
     <div class="output-size" id="outputSize"></div>
@@ -120,14 +160,67 @@
     <script>
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
-        const preview = document.getElementById('preview');
-        const previewImg = document.getElementById('previewImg');
-        const previewLabel = document.getElementById('previewLabel');
+        const list = document.getElementById('list');
+        const countLine = document.getElementById('countLine');
         const convertBtn = document.getElementById('convertBtn');
         const spinner = document.getElementById('spinner');
         const outputSize = document.getElementById('outputSize');
 
-        let selectedFile = null;
+        let files = [];
+
+        function renderList() {
+            list.innerHTML = '';
+            files.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.className = 'item';
+
+                const img = document.createElement('img');
+                img.src = file.url;
+                img.alt = file.name;
+
+                const info = document.createElement('div');
+                info.className = 'info';
+                const name = document.createElement('div');
+                name.className = 'name';
+                name.textContent = file.name;
+                const meta = document.createElement('div');
+                meta.className = 'meta';
+                meta.textContent = `${file.file.size} bytes`;
+                info.appendChild(name);
+                info.appendChild(meta);
+
+                const remove = document.createElement('button');
+                remove.className = 'remove';
+                remove.textContent = 'Remove';
+                remove.addEventListener('click', () => {
+                    files.splice(index, 1);
+                    renderList();
+                });
+
+                item.appendChild(img);
+                item.appendChild(info);
+                item.appendChild(remove);
+                list.appendChild(item);
+            });
+
+            list.classList.toggle('hidden', files.length === 0);
+            const n = files.length;
+            countLine.textContent = n === 0 ? '' : `${n} image${n > 1 ? 's' : ''} added`;
+            convertBtn.disabled = files.length === 0;
+            outputSize.style.display = 'none';
+        }
+
+        function addFiles(fileList) {
+            for (const f of fileList) {
+                if (!f.type.startsWith('image/')) continue;
+                files.push({
+                    file: f,
+                    name: f.name.replace(/\.[^.]+$/, ''),
+                    url: URL.createObjectURL(f)
+                });
+            }
+            renderList();
+        }
 
         dropzone.addEventListener('click', () => fileInput.click());
 
@@ -143,65 +236,78 @@
         dropzone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropzone.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                handleFile(file);
-            }
+            addFiles(e.dataTransfer.files);
         });
 
         fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) handleFile(file);
+            addFiles(e.target.files);
+            fileInput.value = '';
         });
 
-        function handleFile(file) {
-            selectedFile = file;
-            const url = URL.createObjectURL(file);
-            previewImg.src = url;
-            preview.style.display = 'block';
-            previewLabel.textContent = `${file.name} (${file.width}×${file.height})`;
-            dropzone.style.display = 'none';
-            convertBtn.disabled = false;
-            outputSize.style.display = 'none';
-        }
-
         convertBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
+            if (files.length === 0) return;
 
             convertBtn.disabled = true;
             spinner.style.display = 'block';
             outputSize.style.display = 'none';
-
-            const formData = new FormData();
-            formData.append('image', selectedFile);
+            let done = 0;
+            const names = [];
 
             try {
-                const res = await fetch('/upload', { method: 'POST', body: formData });
+                for (const item of files.slice()) {
+                    const formData = new FormData();
+                    formData.append('image', item.file);
 
-                if (!res.ok) {
-                    const err = await res.text();
-                    alert('Error: ' + err);
-                    return;
+                    const res = await fetch('/upload', { method: 'POST', body: formData });
+
+                    if (!res.ok) {
+                        const err = await res.text();
+                        alert('Error on ' + item.name + ': ' + err);
+                        continue;
+                    }
+
+                    const blob = await res.blob();
+                    if (window['showSaveFilePicker']) {
+                        try {
+                            const handle = await window['showSaveFilePicker']({
+                                suggestedName: item.name + '_832x551.png',
+                                types: [{ description: 'PNG image', accept: { 'image/png': ['.png'] } }]
+                            });
+                            const writable = await handle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+                        } catch (e) {
+                            if (e.name === 'AbortError') continue;
+                            triggerDownload(blob, item.name + '_832x551.png');
+                        }
+                    } else {
+                        triggerDownload(blob, item.name + '_832x551.png');
+                    }
+
+                    names.push(item.name + '_832x551.png');
+                    done++;
                 }
 
-                const blob = await res.blob();
-                const downloadUrl = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                const name = selectedFile.name.replace(/\.[^.]+$/, '') + '_832x551.png';
-                a.href = downloadUrl;
-                a.download = name;
-                a.click();
-                URL.revokeObjectURL(downloadUrl);
-
-                outputSize.textContent = 'Saved: ' + name + ' (832×551)';
-                outputSize.style.display = 'block';
+                if (done > 0) {
+                    outputSize.textContent = `Saved ${done} image${done > 1 ? 's' : ''}: ${names.join(', ')}`;
+                    outputSize.style.display = 'block';
+                }
             } catch (err) {
                 alert('Upload failed: ' + err.message);
             } finally {
-                convertBtn.disabled = false;
+                convertBtn.disabled = files.length === 0;
                 spinner.style.display = 'none';
             }
         });
+
+        function triggerDownload(blob, name) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = name;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
     </script>
 </body>
 </html>
